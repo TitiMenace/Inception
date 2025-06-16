@@ -1,35 +1,36 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
-# Lire les secrets depuis le volume monté
-MYSQL_ROOT_PASSWORD=$(cat /run/secrets/db_root_password.txt)
-MYSQL_USER=$(cat /run/secrets/credentials.txt)
-MYSQL_PASSWORD=$(cat /run/secrets/db_password.txt)
-MYSQL_DATABASE="wordpress"
+echo "⏳ Démarrage MariaDB..."
 
-# Démarre temporairement le serveur en arrière-plan
-mysqld_safe --skip-networking &
-pid="$!"
+# Crée le dossier du socket s’il n’existe pas
+mkdir -p /run/mysqld && chown mysql:mysql /run/mysqld
 
-# Attendre que MariaDB soit prêt
-until mysqladmin ping --silent; do
-    echo "⏳ En attente de MariaDB..."
+# Assure les droits corrects sur le datadir
+chown -R mysql:mysql /var/lib/mysql
+
+# Lancer mysqld avec la config personnalisée (bind sur 0.0.0.0)
+su -s /bin/sh mysql -c "mysqld --defaults-file=/etc/mysql/mariadb.conf.d/50-bind.cnf --datadir=/var/lib/mysql" &
+
+# Attente que MariaDB soit prêt
+while ! mysqladmin ping --silent --user=root; do
+    echo "⏳ MariaDB pas encore prêt..."
     sleep 1
 done
 
-# Exécute les commandes de création
+DB_NAME="wordpress"
+DB_USER=$(cat /run/secrets/credentials.txt)
+DB_PASS=$(cat /run/secrets/db_password.txt)
+
+echo "✅ Initialisation de la base..."
 mysql -u root <<EOF
-CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\`;
-CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'%' IDENTIFIED BY '${MYSQL_PASSWORD}';
-GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_USER}'@'%';
+CREATE DATABASE IF NOT EXISTS $DB_NAME;
+CREATE USER IF NOT EXISTS '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS';
+GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'%';
 FLUSH PRIVILEGES;
 EOF
 
-# Arrête le processus temporaire
-kill -s TERM "$pid"
-wait "$pid"
+echo "✅ MariaDB prêt."
 
-# Redémarre le serveur proprement
-exec mysqld_safe
-
+wait
 
