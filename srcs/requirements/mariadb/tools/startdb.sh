@@ -4,16 +4,20 @@ set -e
 echo "⏳ Démarrage MariaDB..."
 
 # Crée le dossier du socket s’il n’existe pas
-mkdir -p /run/mysqld && chown mysql:mysql /run/mysqld
+mkdir -p /run/mysqld
+chown mysql:mysql /run/mysqld
 
 # Assure les droits corrects sur le datadir
 chown -R mysql:mysql /var/lib/mysql
 
-# Lancer mysqld avec la config personnalisée (bind sur 0.0.0.0)
-su -s /bin/sh mysql -c "mysqld --defaults-file=/etc/mysql/mariadb.conf.d/50-bind.cnf --datadir=/var/lib/mysql" &
+# Lance mysqld temporairement en arrière-plan pour init
+echo "▶️ Lancement temporaire de mysqld pour l'initialisation..."
 
-# Attente que MariaDB soit prêt
-while ! mysqladmin ping --silent --user=root; do
+mysqld --user=mysql --skip-networking &
+PID="$!"
+
+# Attente que MariaDB soit prêt en local
+until mysqladmin ping --silent --user=root; do
     echo "⏳ MariaDB pas encore prêt..."
     sleep 1
 done
@@ -30,7 +34,14 @@ GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'%';
 FLUSH PRIVILEGES;
 EOF
 
-echo "✅ MariaDB prêt."
+# Arrête le mysqld temporaire
+kill "$PID"
+wait "$PID"
 
-wait
+echo "✅ MariaDB initialisé. Lancement final..."
+
+# Démarrage réel en réseau (accessible par WordPress)
+exec mysqld --user=mysql --bind-address=0.0.0.0
+
+
 
