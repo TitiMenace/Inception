@@ -46,10 +46,10 @@ if ! wp core is-installed --allow-root --path="/var/www/html"; then
 
     wp core install \
         --url="http://localhost" \
-        --title="Inception42" \
-        --admin_user="admin" \
-        --admin_password="admin" \
-        --admin_email="admin@example.com" \
+        --title="tschecro42" \
+        --admin_user="tschecro42" \
+        --admin_password="tschecro42" \
+        --admin_email="tschecro@example.com" \
         --skip-email \
         --allow-root \
         --path="/var/www/html"
